@@ -19,11 +19,13 @@ library
   exposed-modules: Codec.Compression.LZ4
   hs-source-dirs: src
   -- other-modules:       
+  extra-libraries: lz4
   build-depends:       base ==4.5.*, bytestring
 
 test-suite spec
   type:           exitcode-stdio-1.0
   main-is:        Spec.hs
   hs-source-dirs: test
+  extra-libraries: lz4
   build-depends:  base, hspec, hspec-discover, lz4, QuickCheck, hspec-shouldbe,
                   bytestring
