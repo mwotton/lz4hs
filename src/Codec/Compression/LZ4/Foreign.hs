@@ -10,7 +10,7 @@ foreign import ccall "lz4.h LZ4_compress"
       c_LZ4_compress :: CString -> CString -> CInt -> IO Int
 
 foreign import ccall "lz4hc.h LZ4_compressHC"
-      c_LZ4_compressHC :: CString -> CString -> CInt -> IO CInt
+      c_LZ4_compressHC :: CString -> CString -> CInt -> IO Int
 
 foreign import ccall "lz4.h LZ4_uncompress_unknownOutputSize"
   c_LZ4_uncompress_unknownOutputSize :: CString -> CString -> CInt -> CInt -> IO Int

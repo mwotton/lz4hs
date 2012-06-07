@@ -22,6 +22,10 @@ spec = describe "LZ4" $ do
     it "can roundtrip"
       (property $ forAll string $
        \s -> uncompress (compress s) == s)
+    it "can roundtrip using high compression"
+      (property $ forAll string $
+       \s -> uncompress (compressHC s) == s)  
+      
        
 -- FIX really want a better random string algo
 string :: Gen ByteString
