@@ -1,6 +1,9 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
-
-module Codec.Compression.LZ4.Foreign where
+module Codec.Compression.LZ4.Foreign (
+  c_LZ4_compress,
+  c_LZ4_compressHC,
+  c_LZ4_uncompress_unknownOutputSize, 
+  c_LZ4_compressBound) where
 
 import Foreign
 import Foreign.C.Types

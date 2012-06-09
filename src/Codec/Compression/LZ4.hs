@@ -1,47 +1,52 @@
+-- | This is a binding to the LZ4 library, source of which can be found at
+-- http://code.google.com/p/lz4/
+--
+-- Following zlib's lead, we pretend to be total on Bytestrings
+-- errors may be thrown for bad formats. I'm not entirely comfortable with this,
+-- but I'd like it to be a drop-in replacement for ease of use.
+--
+-- TODO: use a standard chunk size & support lazy Bytestrings, pending Yann's
+-- publication of a formal standard.
+
 module Codec.Compression.LZ4 (compress, compressHC, uncompress) where
 import Codec.Compression.LZ4.Foreign
-import Foreign
+import System.IO.Unsafe (unsafePerformIO)
+import Foreign.Marshal.Alloc(allocaBytes)
+import Foreign.C.String
 import Data.ByteString
-import Debug.Trace
 import Data.ByteString.Unsafe
+-- import Debug.Trace
 
--- Following zlib's lead, we pretend to be pure on Bytestrings
--- errors may be thrown for bad formats. I'm not entirely comfortable with this.
+-- |  Compresses a LZ4-packed String using the slow, better packing.
+compressHC :: ByteString -> ByteString
+compressHC x = compressWorker c_LZ4_compressHC x
 
--- we use unsafeUseAsCStringLen because the underlying files may be large, and
--- we trust lz4 not to tamper with the input buffer.
+-- |  Compresses a LZ4-packed String
+compress :: ByteString -> ByteString
+compress x = compressWorker c_LZ4_compress x
 
--- TODO: use a standard chunk size & support lazy Bytestrings
--- TODO: load files from disk: we don't currently support the full file format with
---       magic archive numbers etc.
-
--- compressHC = compressWorker c_LZ4_compressHC
--- compress   = compressWorker c_LZ4_compress
-
--- for some reason, when I factor this out in the obvious way, I get link errors. Very confusing. FIXME
-compressHC x = unsafePerformIO $ unsafeUseAsCStringLen x $ \(input,len) ->
+compressWorker :: Num b => (CString -> CString -> b -> IO Int) -> ByteString -> ByteString
+compressWorker compressor x = unsafePerformIO $ unsafeUseAsCStringLen x $ \(input,len) ->
   let outLen = c_LZ4_compressBound len in
-  allocaBytes (1+outLen) $ \out -> do    
-    written <- c_LZ4_compressHC input out (fromIntegral len)
+  allocaBytes (1+outLen) $ \out -> do
+    written <- compressor input out (fromIntegral len)
     if written == 0
       then error "compression failed"
-      else packCStringLen (out, written) --  `doTrace` ("compress", x, len, outLen, written)
+      else packCStringLen (out, written)
+           --  `doTrace` ("compress", x, len, outLen, written)
 
-compress x = unsafePerformIO $ unsafeUseAsCStringLen x $ \(input,len) ->
-  let outLen = c_LZ4_compressBound len in
-  allocaBytes (1+outLen) $ \out -> do    
-    written <- c_LZ4_compress input out (fromIntegral len)
-    if written == 0
-      then error "compression failed"
-      else packCStringLen (out, written) --  `doTrace` ("compress", x, len, outLen, written)
-
+-- |  Uncompresses a LZ4-packed String
+--    No chunking yet - Yann is still working on a framing.
+--    As a dirty hack, we assume that it won't decompress to more than 5 times
+--    the length of the compressed file - this will go away with a fixed
+--    frame size
 uncompress :: ByteString -> ByteString
 uncompress x = unsafePerformIO $ unsafeUseAsCStringLen x $ \(input,len) ->
-  -- this is a complete punt. let's say we use 5*len for the moment,
-  -- and extend to lazy bytestrings later.
   let outLen = 5 * len in
   allocaBytes (1+outLen) $ \out -> do
-    written <- c_LZ4_uncompress_unknownOutputSize input out (fromIntegral len) (fromIntegral outLen)
+    written <- c_LZ4_uncompress_unknownOutputSize input out
+                 (fromIntegral len)
+                 (fromIntegral outLen)
     if written < 0
       then error "decompression failed!"
       else packCStringLen (out, written)
