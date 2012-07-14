@@ -2,16 +2,16 @@
 
 module LZ4Spec(spec) where
 
-import Test.Hspec.QuickCheck
-import Test.Hspec.ShouldBe
+import Test.Hspec
+import Test.QuickCheck
+
 import Control.Applicative
 import Data.ByteString(ByteString,pack)
-import Test.QuickCheck hiding (property)
 import Codec.Compression.LZ4
 
 
 
-spec :: Specs
+spec :: Spec
 spec = describe "LZ4" $ do
     it "can compress" $ 
       compress (pack [1]) `shouldBe` compress (pack [1])
