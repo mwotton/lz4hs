@@ -50,6 +50,7 @@ test-suite properties
     base >= 3 && < 5,
     bytestring,
     hspec >= 1.3, QuickCheck,
+    HUnit,
     lz4
 
   ghc-options:      -fno-cse -fwarn-tabs
