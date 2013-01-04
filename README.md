@@ -31,6 +31,7 @@ BSD3. See `LICENSE.txt` for terms of copyright and redistribution.
 
 [lz4]: http://code.google.com/p/lz4
 [issue tracker]: https://github.com/mwotton/lz4hs/issues
+[continuous integration]: https://travis-ci.org/mwotton/lz4hs
 [gh]: https://github.com/mwotton/lz4hs
 [bb]: http://bitbucket.org/mwotton/lz4hs
 [Hackage]: http://hackage.haskell.org/package/lz4c
