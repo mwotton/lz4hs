@@ -7,7 +7,7 @@ import Test.HUnit
 import Test.QuickCheck
 import Control.Applicative
 
-import qualified Data.ByteString as S
+import qualified Data.ByteString.Char8 as S
 import Codec.Compression.LZ4
 
 main :: IO ()
