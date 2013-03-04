@@ -123,7 +123,9 @@ decompress xs
           U.unsafeUseAsCString str $ \cstr -> do
             out <- SI.createAndTrim l $ \p -> do
               r <- fromIntegral <$> c_LZ4_uncompress cstr p (fromIntegral l)
-              return $! if (r <= 0) then 0 else r
+              --- NOTE: r is the count of bytes c_LZ4_uncompress read from input buffer,
+              --- and NOT the count of bytes used in result buffer
+              return $! if (r <= 0) then 0 else l
             return $! if (S.null out) then Nothing else (Just out)
 {-# INLINEABLE decompress #-}
 
