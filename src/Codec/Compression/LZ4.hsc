@@ -1,4 +1,6 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- |
 -- Module      : Codec.Compression.LZ4
 -- Copyright   : (c) Mark Wotton, Austin Seipp 2012
@@ -122,7 +124,7 @@ decompress xs
   where go (l, str) =
           U.unsafeUseAsCString str $ \cstr -> do
             out <- SI.createAndTrim l $ \p -> do
-              r <- fromIntegral <$> c_LZ4_uncompress cstr p (fromIntegral l)
+              r :: Int <- fromIntegral <$> c_LZ4_uncompress cstr p (fromIntegral l)
               --- NOTE: r is the count of bytes c_LZ4_uncompress read from input buffer,
               --- and NOT the count of bytes used in result buffer
               return $! if (r <= 0) then 0 else l
