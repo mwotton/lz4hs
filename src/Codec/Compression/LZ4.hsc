@@ -171,11 +171,9 @@ format l xs = do
 
 -- Gets a ByteString and it's length from the compressed format.
 unformat :: Get (Int, S.ByteString)
-unformat = do
-  c <-  fromIntegral <$> getWord32le
-  l  <- fromIntegral <$> getWord32le
-  bs <- getByteString l
-  return (c, bs)
+unformat =  (,) <$> (fromIntegral <$> getWord32le)
+                <*> (fromIntegral <$> getWord32le >>= getByteString)
+
 
 
 --------------------------------------------------------------------------------
