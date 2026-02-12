@@ -56,6 +56,26 @@ main = hspec $ do
     it "fails cleanly on trailing malformed bytes after complete frame stream" $ do
       let malformed = standardFrameFixture <> BS.pack [0xff, 0x00, 0x7f]
       decompressFrame malformed `shouldReturn` Nothing
+    it "supports bounded framed decode when output fits within limit" $ do
+      result <- decompressFrameBounded 1024 standardFrameFixture
+      result `shouldBe`
+        Right
+          (DecompressFrameBoundedResult
+            "standard lz4 frame payload\n"
+            DecompressFrameBoundedDone)
+    it "supports bounded framed decode continuation across limit boundaries" $ do
+      let payload = standardFrameFixture <> standardFrameFixture
+          stepSize = 10
+      collected <- collectBoundedChunks 0 stepSize payload []
+      collected `shouldBe` "standard lz4 frame payload\nstandard lz4 frame payload\n"
+    it "reports malformed input for bounded framed decode" $ do
+      decompressFrameBounded 1024 truncatedFrameFixture
+        `shouldReturn` Left DecompressFrameBoundedMalformedInput
+    it "rejects invalid bounded framed decode parameters" $ do
+      decompressFrameBoundedFrom (-1) 8 standardFrameFixture
+        `shouldReturn` Left DecompressFrameBoundedInvalidOffset
+      decompressFrameBounded 0 standardFrameFixture
+        `shouldReturn` Left DecompressFrameBoundedInvalidLimit
   describe "regression corpus fixtures" $ do
     it "decodes representative legacy payload fixture with legacy decoder only" $ do
       decompress legacyPayloadFixture `shouldBe` Just "standard lz4 legacy payload\n"
@@ -113,3 +133,17 @@ prop_compression_id comp decomp (S.pack -> xs) =
 prop_decompress_pure comp decomp (S.pack -> xs) =
   let z = comp xs
   in (z >>= decomp) == (z >>= decomp)
+
+collectBoundedChunks :: Int -> Int -> BS.ByteString -> [BS.ByteString] -> IO BS.ByteString
+collectBoundedChunks offset stepSize payload acc = do
+  result <- decompressFrameBoundedFrom offset stepSize payload
+  case result of
+    Left err ->
+      expectationFailure ("unexpected bounded decode failure: " ++ show err) >> return BS.empty
+    Right (DecompressFrameBoundedResult chunk DecompressFrameBoundedDone) ->
+      return (BS.concat (reverse (chunk : acc)))
+    Right (DecompressFrameBoundedResult chunk (DecompressFrameBoundedLimitReached nextOffset))
+      | nextOffset <= offset ->
+          expectationFailure "bounded decode continuation did not advance" >> return BS.empty
+      | otherwise ->
+          collectBoundedChunks nextOffset stepSize payload (chunk : acc)
