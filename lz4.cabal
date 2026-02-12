@@ -19,7 +19,9 @@ cabal-version:       >=1.10
 
 extra-source-files:
   src/cbits/lz4.h, src/cbits/lz4.c,
-  src/cbits/lz4hc.h, src/cbits/lz4hc.c
+  src/cbits/lz4hc.h, src/cbits/lz4hc.c,
+  src/cbits/lz4frame.h, src/cbits/lz4frame.c, src/cbits/lz4frame_static.h,
+  src/cbits/xxhash.h, src/cbits/xxhash.c,
   tests/Properties.hs,
   README.md, AUTHORS.txt
 
@@ -35,7 +37,7 @@ library
     bytestring,
     cereal
 
-  c-sources:       src/cbits/lz4.c src/cbits/lz4hc.c
+  c-sources:       src/cbits/lz4.c src/cbits/lz4hc.c src/cbits/lz4frame.c src/cbits/xxhash.c
   include-dirs:    src/cbits
 
   ghc-options:     -Wall -O2 -fwarn-tabs

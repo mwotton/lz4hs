@@ -3,6 +3,18 @@
 This library implements Haskell bindings to [lz4][], a fast
 compression library.
 
+## Formats
+
+- `Codec.Compression.LZ4.compress` / `decompress` keep the historical
+  length-prefixed format used by this package.
+- `Codec.Compression.LZ4.compressFrame` / `decompressFrame` provide a
+  separate framed API for compatibility with standard `lz4` frame files.
+- Legacy and framed formats are intentionally separate: legacy payloads
+  are decoded only by `decompress`, while framed payloads are decoded
+  only by `decompressFrame`.
+- The framed API uses native `LZ4F` bindings and does not shell out to
+  the `lz4` executable at runtime.
+
 [travis-ci.org](http://travis-ci.org) results: [![Build Status](https://secure.travis-ci.org/mwotton/lz4hs.png?branch=master)](http://travis-ci.org/mwotton/lz4hs)
 
 # Installation

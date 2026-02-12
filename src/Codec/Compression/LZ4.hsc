@@ -32,6 +32,10 @@ module Codec.Compression.LZ4
        , compressPlusHC      -- :: S.ByteString -> S.ByteString
        , decompressPlusHC    -- :: S.ByteString -> S.ByteString
 
+         -- ** Framed format (compatible with @lz4@ CLI files)
+       , compressFrame       -- :: S.ByteString -> IO (Maybe S.ByteString)
+       , decompressFrame     -- :: S.ByteString -> IO (Maybe S.ByteString)
+
          -- * FFI functions
        , c_LZ4_compress      -- :: Ptr CChar -> Ptr Word8 -> CInt -> IO CInt
        , c_LZ4_compressHC    -- :: Ptr CChar -> Ptr Word8 -> CInt -> IO CInt
@@ -43,8 +47,10 @@ import Prelude hiding (max)
 import Data.Word
 import Foreign.Ptr
 import Foreign.C
+import Control.Exception (finally)
+import Foreign.Marshal.Alloc (alloca, allocaBytes)
+import Foreign.Storable (peek, poke)
 import System.IO.Unsafe (unsafePerformIO)
-import Control.Applicative
 
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Internal as SI
@@ -54,6 +60,12 @@ import Data.Serialize
 
 #include <lz4.h>
 #include <lz4hc.h>
+#include <lz4frame.h>
+
+type LZ4FDecompressionContext = Ptr ()
+
+lz4fVersion :: CUInt
+lz4fVersion = #{const LZ4F_VERSION}
 
 
 --------------------------------------------------------------------------------
@@ -142,6 +154,72 @@ decompressPlusHC xs
   | otherwise = decompress xs >>= decompress
 {-# INLINEABLE decompressPlusHC #-}
 
+-- | Compress to the standard LZ4 frame format (compatible with @lz4@ CLI files).
+--
+-- Returns 'Nothing' if frame encoding fails.
+compressFrame :: S.ByteString -> IO (Maybe S.ByteString)
+compressFrame xs =
+  U.unsafeUseAsCStringLen xs $ \(src, srcLen) -> do
+    let srcLen' = fromIntegral srcLen :: CSize
+        dstCap = c_LZ4F_compressFrameBound srcLen' nullPtr
+    if lz4fIsError dstCap
+      then return Nothing
+      else do
+        out <- SI.createAndTrim (fromIntegral dstCap) $ \dst -> do
+          written <- c_LZ4F_compressFrame dst dstCap (castPtr src) srcLen' nullPtr
+          return $! if lz4fIsError written then 0 else fromIntegral written
+        return $! if S.null out then Nothing else Just out
+
+-- | Decompress the standard LZ4 frame format (compatible with @lz4@ CLI files).
+--
+-- Returns 'Nothing' if input is not valid framed LZ4 data.
+decompressFrame :: S.ByteString -> IO (Maybe S.ByteString)
+decompressFrame xs
+  | S.null xs = return Nothing
+  | otherwise =
+      U.unsafeUseAsCStringLen xs $ \(src, srcLen) ->
+        alloca $ \ctxPtr -> do
+          createResult <- c_LZ4F_createDecompressionContext ctxPtr lz4fVersion
+          if lz4fIsError createResult
+            then return Nothing
+            else do
+              ctx <- peek ctxPtr
+              finally (go ctx src srcLen 0 []) (c_LZ4F_freeDecompressionContext ctx >> return ())
+  where
+    outputChunkSize = 64 * 1024
+
+    go :: LZ4FDecompressionContext -> Ptr CChar -> Int -> Int -> [S.ByteString] -> IO (Maybe S.ByteString)
+    go ctx src srcLen srcOffset chunks = allocaBytes outputChunkSize $ \dst -> do
+      alloca $ \dstSizePtr ->
+        alloca $ \srcSizePtr -> do
+          poke dstSizePtr (fromIntegral outputChunkSize :: CSize)
+          poke srcSizePtr (fromIntegral (srcLen - srcOffset) :: CSize)
+          hint <- c_LZ4F_decompress ctx
+                                   (castPtr dst)
+                                   dstSizePtr
+                                   (castPtr src `plusPtr` srcOffset)
+                                   srcSizePtr
+                                   nullPtr
+          consumed <- fromIntegral <$> peek srcSizePtr
+          produced <- fromIntegral <$> peek dstSizePtr
+          if lz4fIsError hint
+            then return Nothing
+            else do
+              chunk <- if produced == 0
+                         then return S.empty
+                         else S.packCStringLen (dst, produced)
+              let nextOffset = srcOffset + consumed
+                  nextChunks = if S.null chunk then chunks else chunk : chunks
+              if hint == 0
+                then if nextOffset == srcLen
+                       then return $! Just (S.concat (reverse nextChunks))
+                       else return Nothing
+                else if consumed == 0 && produced == 0
+                       then return Nothing
+                       else go ctx src srcLen nextOffset nextChunks
+
+lz4fIsError :: CSize -> Bool
+lz4fIsError code = c_LZ4F_isError code /= 0
 
 --------------------------------------------------------------------------------
 -- Utilities
@@ -213,3 +291,38 @@ foreign import ccall unsafe "lz4.h LZ4_uncompress"
                    -> Ptr Word8 -- ^ Dest
                    -> CInt      -- ^ Size of ORIGINAL INPUT
                    -> IO CInt   -- ^ Result
+
+foreign import ccall unsafe "LZ4F_compressFrameBound"
+  c_LZ4F_compressFrameBound :: CSize
+                            -> Ptr ()
+                            -> CSize
+
+foreign import ccall unsafe "LZ4F_compressFrame"
+  c_LZ4F_compressFrame :: Ptr Word8
+                       -> CSize
+                       -> Ptr Word8
+                       -> CSize
+                       -> Ptr ()
+                       -> IO CSize
+
+foreign import ccall unsafe "LZ4F_isError"
+  c_LZ4F_isError :: CSize
+                 -> CUInt
+
+foreign import ccall unsafe "LZ4F_createDecompressionContext"
+  c_LZ4F_createDecompressionContext :: Ptr LZ4FDecompressionContext
+                                    -> CUInt
+                                    -> IO CSize
+
+foreign import ccall unsafe "LZ4F_freeDecompressionContext"
+  c_LZ4F_freeDecompressionContext :: LZ4FDecompressionContext
+                                  -> IO CSize
+
+foreign import ccall unsafe "LZ4F_decompress"
+  c_LZ4F_decompress :: LZ4FDecompressionContext
+                    -> Ptr Word8
+                    -> Ptr CSize
+                    -> Ptr Word8
+                    -> Ptr CSize
+                    -> Ptr ()
+                    -> IO CSize
