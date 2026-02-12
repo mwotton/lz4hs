@@ -44,6 +44,25 @@ main = hspec $ do
       decompressFrame standardFrameFixture `shouldReturn` Just "standard lz4 frame payload\n"
     it "decompresses standard empty-file lz4 frame fixture" $ do
       decompressFrame emptyFrameFixture `shouldReturn` Just ""
+    it "decompresses concatenated standard lz4 frames" $ do
+      let combined = standardFrameFixture <> standardFrameFixture
+      decompressFrame combined `shouldReturn` Just ("standard lz4 frame payload\n" <> "standard lz4 frame payload\n")
+    it "fails cleanly on truncated framed payload fixture" $ do
+      decompressFrame truncatedFrameFixture `shouldReturn` Nothing
+    it "fails cleanly on corrupted frame header fixture" $ do
+      decompressFrame badHeaderFrameFixture `shouldReturn` Nothing
+    it "fails cleanly on corrupted frame checksum fixture" $ do
+      decompressFrame badChecksumFrameFixture `shouldReturn` Nothing
+    it "fails cleanly on trailing malformed bytes after complete frame stream" $ do
+      let malformed = standardFrameFixture <> BS.pack [0xff, 0x00, 0x7f]
+      decompressFrame malformed `shouldReturn` Nothing
+  describe "regression corpus fixtures" $ do
+    it "decodes representative legacy payload fixture with legacy decoder only" $ do
+      decompress legacyPayloadFixture `shouldBe` Just "standard lz4 legacy payload\n"
+      decompressFrame legacyPayloadFixture `shouldReturn` Nothing
+    it "decodes representative framed payload fixture with framed decoder only" $ do
+      decompress standardFrameFixture `shouldBe` Nothing
+      decompressFrame standardFrameFixture `shouldReturn` Just "standard lz4 frame payload\n"
   describe "regression test" $ do
     let input = "\STXd\STX\SOH\NUL\NUL\NUL\NUL\NUL\NUL\NUL\vexample.com\SOH\NUL\NUL\NUL\NUL\NUL\NUL\NUL\ETX\NUL\NUL\NUL\NUL\NUL\NUL\NUL\SI\NUL\NUL\NUL\NUL\NUL\NUL\NUL\tWhirlpool\NUL\NUL\NUL\NUL\NUL\NUL\NUL\vexample.com\NUL\STXf\SOH\SOH\NUL\NUL\NUL\NUL\NUL\NUL\NUL\ffacebook.com\SOH\NUL\NUL\NUL\NUL\NUL\NUL\NUL\SOH\NUL\NUL\NUL\NUL\NUL\NUL\NUL\b\NUL\NUL\NUL\NUL\NUL\NUL\NUL\EOTSHA1\NUL\NUL\NUL\NUL\NUL\NUL\NUL\ffacebook.com\NUL\SOH\NUL\NUL\NUL\NUL\NUL\NUL\NUL\tgmail.com\SOH\NUL\NUL\NUL\NUL\NUL\NUL"
     it "can compress an oddly full-of-NULLs string" $ do
@@ -63,6 +82,26 @@ emptyFrameFixture :: BS.ByteString
 emptyFrameFixture = BS.pack
   [ 0x04, 0x22, 0x4d, 0x18, 0x64, 0x40, 0xa7, 0x00
   , 0x00, 0x00, 0x00, 0x05, 0x5d, 0xcc, 0x02
+  ]
+
+-- Regression corpus expectations:
+--   * standardFrameFixture / emptyFrameFixture: valid framed payloads -> Just decoded text.
+--   * truncatedFrameFixture / badHeaderFrameFixture / badChecksumFrameFixture: invalid framed payloads -> Nothing.
+--   * legacyPayloadFixture: valid legacy payload -> legacy decoder Just decoded text, framed decoder Nothing.
+truncatedFrameFixture :: BS.ByteString
+truncatedFrameFixture = BS.take (BS.length standardFrameFixture - 1) standardFrameFixture
+
+badHeaderFrameFixture :: BS.ByteString
+badHeaderFrameFixture = BS.cons 0x00 (BS.drop 1 standardFrameFixture)
+
+badChecksumFrameFixture :: BS.ByteString
+badChecksumFrameFixture = BS.take (BS.length standardFrameFixture - 1) standardFrameFixture <> BS.singleton 0x89
+
+legacyPayloadFixture :: BS.ByteString
+legacyPayloadFixture = BS.pack
+  [ 28, 0, 0, 0, 30, 0, 0, 0, 240, 13, 115, 116, 97, 110, 100, 97
+  , 114, 100, 32, 108, 122, 52, 32, 108, 101, 103, 97, 99, 121, 32
+  , 112, 97, 121, 108, 111, 97, 100, 10
   ]
 
 prop_compress_pure comp decomp (S.pack -> xs) =
