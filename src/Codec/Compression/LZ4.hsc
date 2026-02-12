@@ -35,6 +35,10 @@ module Codec.Compression.LZ4
          -- ** Framed format (compatible with @lz4@ CLI files)
        , compressFrame       -- :: S.ByteString -> IO (Maybe S.ByteString)
        , decompressFrame     -- :: S.ByteString -> IO (Maybe S.ByteString)
+       , CompressFrameError(..)
+       , DecompressFrameError(..)
+       , compressFrameEither -- :: S.ByteString -> IO (Either CompressFrameError S.ByteString)
+       , decompressFrameEither -- :: S.ByteString -> IO (Either DecompressFrameError S.ByteString)
        , DecompressFrameBoundedError(..)
        , DecompressFrameBoundedStatus(..)
        , DecompressFrameBoundedResult(..)
@@ -71,6 +75,29 @@ type LZ4FDecompressionContext = Ptr ()
 
 lz4fVersion :: CUInt
 lz4fVersion = #{const LZ4F_VERSION}
+
+-- | Stable framed encode error contract.
+--
+-- Invariants:
+--   * 'CompressFrameInvalidInput' is reserved for future argument validation.
+--   * 'CompressFrameLibraryError' always carries the raw @LZ4F_getErrorName@.
+data CompressFrameError
+  = CompressFrameInvalidInput
+  | CompressFrameLibraryError !String
+  deriving (Eq, Show)
+
+-- | Stable framed decode error contract.
+--
+-- Invariants:
+--   * 'DecompressFrameInvalidInput' indicates pre-FFI argument rejection.
+--   * 'DecompressFrameContextError' indicates decompression context setup failure.
+--   * 'DecompressFrameMalformedInput' indicates malformed framed payload data.
+--   * library-error constructors always carry raw @LZ4F_getErrorName@.
+data DecompressFrameError
+  = DecompressFrameInvalidInput
+  | DecompressFrameContextError !String
+  | DecompressFrameMalformedInput !String
+  deriving (Eq, Show)
 
 -- | Errors returned by bounded framed decompression.
 data DecompressFrameBoundedError
@@ -180,39 +207,55 @@ decompressPlusHC xs
 
 -- | Compress to the standard LZ4 frame format (compatible with @lz4@ CLI files).
 --
--- Returns 'Nothing' if frame encoding fails.
+-- Backward-compatible wrapper over 'compressFrameEither'.
 compressFrame :: S.ByteString -> IO (Maybe S.ByteString)
-compressFrame xs =
+compressFrame xs = eitherToMaybe <$> compressFrameEither xs
+
+-- | Compress to standard LZ4 frame format with typed errors.
+compressFrameEither :: S.ByteString -> IO (Either CompressFrameError S.ByteString)
+compressFrameEither xs =
   U.unsafeUseAsCStringLen xs $ \(src, srcLen) -> do
     let srcLen' = fromIntegral srcLen :: CSize
         dstCap = c_LZ4F_compressFrameBound srcLen' nullPtr
     if lz4fIsError dstCap
-      then return Nothing
+      then Left . CompressFrameLibraryError <$> lz4fErrorName dstCap
       else do
-        out <- SI.createAndTrim (fromIntegral dstCap) $ \dst -> do
-          written <- c_LZ4F_compressFrame dst dstCap (castPtr src) srcLen' nullPtr
-          return $! if lz4fIsError written then 0 else fromIntegral written
-        return $! if S.null out then Nothing else Just out
+        alloca $ \writtenPtr -> do
+          poke writtenPtr 0
+          out <- SI.createAndTrim (fromIntegral dstCap) $ \dst -> do
+            written <- c_LZ4F_compressFrame dst dstCap (castPtr src) srcLen' nullPtr
+            poke writtenPtr written
+            return $! if lz4fIsError written then 0 else fromIntegral written
+          written <- peek writtenPtr
+          if lz4fIsError written
+            then Left . CompressFrameLibraryError <$> lz4fErrorName written
+            else if S.null out
+                   then return (Left (CompressFrameLibraryError "unknown_frame_encode_failure"))
+                   else return (Right out)
 
 -- | Decompress the standard LZ4 frame format (compatible with @lz4@ CLI files).
 --
--- Returns 'Nothing' if input is not valid framed LZ4 data.
+-- Backward-compatible wrapper over 'decompressFrameEither'.
 decompressFrame :: S.ByteString -> IO (Maybe S.ByteString)
-decompressFrame xs
-  | S.null xs = return Nothing
+decompressFrame xs = eitherToMaybe <$> decompressFrameEither xs
+
+-- | Decompress standard LZ4 frame format with typed errors.
+decompressFrameEither :: S.ByteString -> IO (Either DecompressFrameError S.ByteString)
+decompressFrameEither xs
+  | S.null xs = return (Left DecompressFrameInvalidInput)
   | otherwise =
       U.unsafeUseAsCStringLen xs $ \(src, srcLen) ->
         alloca $ \ctxPtr -> do
           createResult <- c_LZ4F_createDecompressionContext ctxPtr lz4fVersion
           if lz4fIsError createResult
-            then return Nothing
+            then Left . DecompressFrameContextError <$> lz4fErrorName createResult
             else do
               ctx <- peek ctxPtr
               finally (go ctx src srcLen 0 []) (c_LZ4F_freeDecompressionContext ctx >> return ())
   where
     outputChunkSize = 64 * 1024
 
-    go :: LZ4FDecompressionContext -> Ptr CChar -> Int -> Int -> [S.ByteString] -> IO (Maybe S.ByteString)
+    go :: LZ4FDecompressionContext -> Ptr CChar -> Int -> Int -> [S.ByteString] -> IO (Either DecompressFrameError S.ByteString)
     go ctx src srcLen srcOffset chunks = allocaBytes outputChunkSize $ \dst -> do
       alloca $ \dstSizePtr ->
         alloca $ \srcSizePtr -> do
@@ -227,7 +270,7 @@ decompressFrame xs
           consumed <- fromIntegral <$> peek srcSizePtr
           produced <- fromIntegral <$> peek dstSizePtr
           if lz4fIsError hint
-            then return Nothing
+            then Left . DecompressFrameMalformedInput <$> lz4fErrorName hint
             else do
               chunk <- if produced == 0
                          then return S.empty
@@ -236,12 +279,12 @@ decompressFrame xs
                   nextChunks = if S.null chunk then chunks else chunk : chunks
               if hint == 0
                 then if nextOffset == srcLen
-                       then return $! Just (S.concat (reverse nextChunks))
+                       then return $! Right (S.concat (reverse nextChunks))
                        else if consumed == 0 && produced == 0
-                              then return Nothing
+                              then return (Left (DecompressFrameMalformedInput "zero_progress_with_unconsumed_input"))
                               else go ctx src srcLen nextOffset nextChunks
                 else if consumed == 0 && produced == 0
-                       then return Nothing
+                       then return (Left (DecompressFrameMalformedInput "zero_progress_before_stream_end"))
                        else go ctx src srcLen nextOffset nextChunks
 
 -- | Decompress framed LZ4 with an explicit output byte limit.
@@ -347,6 +390,17 @@ decompressFrameBoundedFrom outputOffset limit xs
 lz4fIsError :: CSize -> Bool
 lz4fIsError code = c_LZ4F_isError code /= 0
 
+lz4fErrorName :: CSize -> IO String
+lz4fErrorName code = do
+  namePtr <- c_LZ4F_getErrorName code
+  if namePtr == nullPtr
+    then return "unknown_lz4f_error"
+    else peekCString namePtr
+
+eitherToMaybe :: Either e a -> Maybe a
+eitherToMaybe (Left _) = Nothing
+eitherToMaybe (Right x) = Just x
+
 --------------------------------------------------------------------------------
 -- Utilities
 
@@ -434,6 +488,10 @@ foreign import ccall unsafe "LZ4F_compressFrame"
 foreign import ccall unsafe "LZ4F_isError"
   c_LZ4F_isError :: CSize
                  -> CUInt
+
+foreign import ccall unsafe "LZ4F_getErrorName"
+  c_LZ4F_getErrorName :: CSize
+                      -> IO CString
 
 foreign import ccall unsafe "LZ4F_createDecompressionContext"
   c_LZ4F_createDecompressionContext :: Ptr LZ4FDecompressionContext

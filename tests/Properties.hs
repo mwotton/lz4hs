@@ -31,6 +31,14 @@ main = hspec $ do
       compressed `shouldSatisfy` maybe False (not . BS.null)
       decompressed <- maybe (return Nothing) decompressFrame compressed
       decompressed `shouldBe` Just input
+    it "round-trips via the typed framed API" $ do
+      let input = "lz4 typed frame round-trip test payload"
+      compressed <- compressFrameEither input
+      compressed `shouldSatisfy` either (const False) (not . BS.null)
+      decompressed <- case compressed of
+        Left err -> expectationFailure ("unexpected encode error: " ++ show err) >> return (Left DecompressFrameInvalidInput)
+        Right payload -> decompressFrameEither payload
+      decompressed `shouldBe` Right input
     it "keeps framed API separate from legacy decode format" $ do
       let input = "legacy and framed APIs should stay independent"
       compressed <- compressFrame input
@@ -53,6 +61,20 @@ main = hspec $ do
       decompressFrame badHeaderFrameFixture `shouldReturn` Nothing
     it "fails cleanly on corrupted frame checksum fixture" $ do
       decompressFrame badChecksumFrameFixture `shouldReturn` Nothing
+    it "returns typed malformed-input errors for representative invalid frames" $ do
+      let assertMalformed payload = do
+            result <- decompressFrameEither payload
+            case result of
+              Left (DecompressFrameMalformedInput _) -> return ()
+              other -> expectationFailure ("expected malformed-input error, got: " ++ show other)
+      assertMalformed truncatedFrameFixture
+      assertMalformed badHeaderFrameFixture
+      assertMalformed badChecksumFrameFixture
+    it "keeps typed decode errors backward-compatible with Maybe wrapper" $ do
+      typed <- decompressFrameEither truncatedFrameFixture
+      legacy <- decompressFrame truncatedFrameFixture
+      typed `shouldSatisfy` (\r -> case r of Left (DecompressFrameMalformedInput _) -> True; _ -> False)
+      legacy `shouldBe` Nothing
     it "fails cleanly on trailing malformed bytes after complete frame stream" $ do
       let malformed = standardFrameFixture <> BS.pack [0xff, 0x00, 0x7f]
       decompressFrame malformed `shouldReturn` Nothing

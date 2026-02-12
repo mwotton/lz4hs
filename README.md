@@ -9,6 +9,10 @@ compression library.
   length-prefixed format used by this package.
 - `Codec.Compression.LZ4.compressFrame` / `decompressFrame` provide a
   separate framed API for compatibility with standard `lz4` frame files.
+- `compressFrameEither` / `decompressFrameEither` provide the stable
+  typed framed error contract for encode/decode, while
+  `compressFrame` / `decompressFrame` remain backward-compatible
+  `Maybe` wrappers.
 - `decompressFrameBounded` / `decompressFrameBoundedFrom` provide a
   bounded framed decode path that yields partial output with an explicit
   continuation offset when a caller-supplied output limit is reached.
