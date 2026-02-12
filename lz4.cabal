@@ -23,6 +23,7 @@ extra-source-files:
   src/cbits/lz4frame.h, src/cbits/lz4frame.c, src/cbits/lz4frame_static.h,
   src/cbits/xxhash.h, src/cbits/xxhash.c,
   tests/Properties.hs,
+  tests/Oracle.hs,
   README.md, AUTHORS.txt
 
 source-repository head
@@ -53,6 +54,25 @@ test-suite properties
     bytestring,
     hspec >= 1.3, QuickCheck,
     HUnit,
+    lz4
+
+  ghc-options:      -fno-cse -fwarn-tabs
+  default-language: Haskell2010
+
+test-suite oracle
+  hs-source-dirs: tests
+  main-is:        Oracle.hs
+  type:           exitcode-stdio-1.0
+
+  build-depends:
+    base >= 3 && < 5,
+    bytestring,
+    hspec >= 1.3,
+    minithesis,
+    minithesis-hspec,
+    process,
+    directory,
+    filepath,
     lz4
 
   ghc-options:      -fno-cse -fwarn-tabs

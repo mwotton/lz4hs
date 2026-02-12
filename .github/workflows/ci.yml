@@ -20,13 +20,19 @@ jobs:
       - name: Install native benchmark dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libsnappy-dev
+          sudo apt-get install -y libsnappy-dev lz4
 
       - name: Build library and tests
         run: cabal build
 
       - name: Run tests
         run: cabal test properties
+
+      - name: Run oracle tests
+        env:
+          MINITHESIS_NO_DATABASE: "1"
+          MINITHESIS_MAX_EXAMPLES: "40"
+        run: cabal test oracle
 
       - name: Build benchmark (required)
         run: cabal build bench1
