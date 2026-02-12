@@ -21,7 +21,7 @@ cabal-version:       >=1.10
 extra-source-files:
   tests/Properties.hs,
   tests/Oracle.hs,
-  README.md, AUTHORS.txt
+  README.md, CHANGELOG.md, AUTHORS.txt
 
 source-repository head
   type: git
