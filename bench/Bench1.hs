@@ -9,19 +9,12 @@ import qualified Codec.Compression.QuickLZ as QuickLZ
 import qualified Codec.Compression.LZ4     as LZ4
 
 import Criterion.Main
-import Criterion.Config
-import Control.DeepSeq (NFData)
-
-
-instance NFData S.ByteString
 
 
 main :: IO ()
 main = do
   words <- S.readFile "/usr/share/dict/words"
-
-  let cfg = defaultConfig { cfgPerformGC = ljust True }
-  defaultMainWith cfg (return ())
+  defaultMain
     [ bgroup "/usr/share/dict/words"
       [ bench "snappy"    $ nf Snappy.compress words
       , bench "quicklz"   $ nf QuickLZ.compress words
