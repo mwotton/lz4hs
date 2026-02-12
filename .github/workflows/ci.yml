@@ -18,15 +18,15 @@ jobs:
           cabal-version: '3.14.1.1'
 
       - name: Install native benchmark dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libsnappy-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsnappy-dev
 
       - name: Build library and tests
-      run: cabal build
+        run: cabal build
 
       - name: Run tests
-      run: cabal test properties
+        run: cabal test properties
 
       - name: Build benchmark (required)
-      run: cabal build bench1
+        run: cabal build bench1
