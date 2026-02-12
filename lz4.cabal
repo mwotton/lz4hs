@@ -4,14 +4,14 @@ synopsis:            LZ4 compression for ByteStrings
 description:
   High level bindings to the LZ4 compression library.
   .
-  Currently based on lz4 r75. C sources are included and no external
-  dependencies are needed other than @cereal@.
-homepage:            http://github.com/mwotton/lz4hs
+  Bundles upstream LZ4 C sources (including @lz4frame@ and @xxhash@)
+  under @src/cbits@, so no external LZ4 C library is required.
+homepage:            https://github.com/mwotton/lz4hs
 bug-reports:         https://github.com/mwotton/lz4hs/issues
 license:             BSD3
 license-file:        LICENSE.txt
 copyright:           Copyright (c) Mark Wotton, Austin Seipp 2012
-author:              Mark Wotton <mwotton@gmail.com)
+author:              Mark Wotton <mwotton@gmail.com>
 maintainer:          mwotton@gmail.com
 category:            Codec
 build-type:          Simple

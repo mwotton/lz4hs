@@ -1,7 +1,9 @@
 # Fast compression for Haskell ByteStrings
 
-This library implements Haskell bindings to [lz4][], a fast
-compression library.
+This library implements Haskell bindings to [LZ4][], a fast
+compression library. The package vendors the required C sources
+(`lz4`, `lz4hc`, `lz4frame`, and `xxhash`) in `src/cbits`, so
+normal builds do not require an external LZ4 development package.
 
 ## Formats
 
@@ -22,7 +24,13 @@ compression library.
 - The framed API uses native `LZ4F` bindings and does not shell out to
   the `lz4` executable at runtime.
 
-[travis-ci.org](http://travis-ci.org) results: [![Build Status](https://secure.travis-ci.org/mwotton/lz4hs.png?branch=master)](http://travis-ci.org/mwotton/lz4hs)
+## CI expectations
+
+GitHub Actions CI runs:
+
+- `cabal test properties`
+- `cabal test oracle` (requires the `lz4` CLI in `PATH`)
+- `cabal build --enable-benchmarks lz4:bench:bench1`
 
 # Installation
 
@@ -48,9 +56,7 @@ See `AUTHORS.txt`.
 
 BSD3. See `LICENSE.txt` for terms of copyright and redistribution.
 
-[lz4]: http://code.google.com/p/lz4
+[LZ4]: https://github.com/lz4/lz4
 [issue tracker]: https://github.com/mwotton/lz4hs/issues
-[continuous integration]: https://travis-ci.org/mwotton/lz4hs
 [gh]: https://github.com/mwotton/lz4hs
-[bb]: http://bitbucket.org/mwotton/lz4hs
-[Hackage]: http://hackage.haskell.org/package/lz4c
+[Hackage]: https://hackage.haskell.org/package/lz4
