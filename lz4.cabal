@@ -4,8 +4,9 @@ synopsis:            LZ4 compression for ByteStrings
 description:
   High level bindings to the LZ4 compression library.
   .
-  Bundles upstream LZ4 C sources (including @lz4frame@ and @xxhash@)
-  under @src/cbits@, so no external LZ4 C library is required.
+  Links against the system @liblz4@ (including @lz4frame@).
+  You must have the LZ4 headers and library installed (for example
+  @liblz4-dev@ on Debian/Ubuntu, or @lz4@ via Homebrew).
 homepage:            https://github.com/mwotton/lz4hs
 bug-reports:         https://github.com/mwotton/lz4hs/issues
 license:             BSD3
@@ -18,10 +19,6 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 extra-source-files:
-  src/cbits/lz4.h, src/cbits/lz4.c,
-  src/cbits/lz4hc.h, src/cbits/lz4hc.c,
-  src/cbits/lz4frame.h, src/cbits/lz4frame.c, src/cbits/lz4frame_static.h,
-  src/cbits/xxhash.h, src/cbits/xxhash.c,
   tests/Properties.hs,
   tests/Oracle.hs,
   README.md, AUTHORS.txt
@@ -38,8 +35,7 @@ library
     bytestring,
     cereal
 
-  c-sources:       src/cbits/lz4.c src/cbits/lz4hc.c src/cbits/lz4frame.c src/cbits/xxhash.c
-  include-dirs:    src/cbits
+  pkgconfig-depends: liblz4
 
   ghc-options:     -Wall -O2 -fwarn-tabs
   default-language: Haskell2010

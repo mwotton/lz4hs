@@ -1,9 +1,10 @@
 # Fast compression for Haskell ByteStrings
 
 This library implements Haskell bindings to [LZ4][], a fast
-compression library. The package vendors the required C sources
-(`lz4`, `lz4hc`, `lz4frame`, and `xxhash`) in `src/cbits`, so
-normal builds do not require an external LZ4 development package.
+compression library. It links against the system `liblz4` (including
+`lz4frame`), so builds require the LZ4 headers and library to be
+installed (for example `liblz4-dev` on Debian/Ubuntu, or `lz4` via
+Homebrew).
 
 ## Formats
 

@@ -20,7 +20,7 @@ jobs:
       - name: Install native benchmark dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libsnappy-dev lz4
+          sudo apt-get install -y --no-install-recommends libsnappy-dev lz4 liblz4-dev pkg-config
 
       - name: Run tests
         run: cabal test properties
