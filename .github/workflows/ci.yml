@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.12.2'
+          cabal-version: '3.14.1.1'
+
+      - name: Install native benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libsnappy-dev lz4 liblz4-dev pkg-config
+
+      - name: Run tests
+        run: cabal test properties
+
+      - name: Run oracle tests
+        env:
+          MINITHESIS_NO_DATABASE: "1"
+          MINITHESIS_MAX_EXAMPLES: "40"
+        run: cabal test oracle
+
+      - name: Build benchmark (required)
+        run: cabal build --enable-benchmarks lz4:bench:bench1
